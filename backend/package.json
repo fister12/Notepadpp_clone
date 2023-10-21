@@ -1,16 +1,31 @@
 {
-  "name": "backend",
+  "name": "notepad_app",
   "version": "1.0.0",
-  "description": "",
+  "description": "This is a clone od basic notepad with multiple user access",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "keywords": [],
-  "author": "",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/fister12/Notepadpp_clone.git"
+  },
+  "keywords": [
+    "notepad",
+    "collaboration",
+    "mern",
+    "stack"
+  ],
+  "author": "fister12 (@aadik04)",
   "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/fister12/Notepadpp_clone/issues"
+  },
+  "homepage": "https://github.com/fister12/Notepadpp_clone#readme",
   "dependencies": {
+    "body-parser": "^1.20.2",
     "express": "^4.18.2",
-    "mongoose": "^7.6.1"
+    "mongoose": "^7.6.3",
+    "websocket": "^1.0.34"
   }
 }
