@@ -1,66 +1,96 @@
 const express = require('express');
-const bodyParser = require('body-parser');
+const socketio = require('socket.io');
+const cors = require('cors');
 const fs = require('fs');
+const { createProxyMiddleware } = require('http-proxy-middleware');
+
+// Define app variable
 const app = express();
+
+// Proxy middleware for API requests
+app.use('/api', createProxyMiddleware({
+  target: 'http://localhost:3000',
+  changeOrigin: true
+}));
+
+// Create server
 const server = require('http').createServer(app);
-const io = require('socket.io')(server);
-const port = process.env.PORT || 3000;
 
-app.use(bodyParser.json());
+// Port for server
+const port = process.env.PORT || 5000;
 
-// Define the path to the notepads directory
-const notepadsDirectory = './notepads/';
+// Middleware
+app.use(cors());
+app.use(express.json());
 
-// In-memory store for user registration
-const registeredUsers = {};
+// Path to store JSON files and user data
+const dataPath = './data.json';
+const usersPath = './users.json';
 
-// API endpoint to get the content of a specific notepad
-app.get('/api/notepad/:id', (req, res) => {
-  const notepadId = req.params.id;
-  const notepadPath = `${notepadsDirectory}notepad${notepadId}.json`;
-
-  if (fs.existsSync(notepadPath)) {
-    const content = fs.readFileSync(notepadPath, 'utf8');
-    res.json({ content, users: registeredUsers });
-  } else {
-    res.status(404).json({ message: 'Notepad not found' });
+// Function to read data from file
+function readData(path) {
+  try {
+    const data = fs.readFileSync(path, 'utf8');
+    return data ? JSON.parse(data) : {};
+  } catch (err) {
+    console.error(err);
+    return {};
   }
-});
+}
 
-// API endpoint to save changes to a specific notepad
-app.post('/api/notepad/:id', (req, res) => {
-  const notepadId = req.params.id;
-  const notepadPath = `${notepadsDirectory}notepad${notepadId}.json`;
-  const newContent = req.body.content;
-
-  fs.writeFileSync(notepadPath, JSON.stringify({ content: newContent }));
-  res.json({ message: 'Notepad updated successfully' });
-
-  // Notify all connected clients about the change
-  io.sockets.emit(`notepad-${notepadId}-update`, newContent);
-});
-
-// API endpoint for user registration
-app.post('/api/register', (req, res) => {
-  const { username } = req.body;
-  if (!username) {
-    return res.status(400).json({ message: 'Username is required' });
+// Function to write data to file
+function writeData(path, data) {
+  try {
+    fs.writeFileSync(path, JSON.stringify(data, null, 2), 'utf8');
+  } catch (err) {
+    console.error(err);
   }
+}
 
-  if (registeredUsers[username]) {
-    return res.status(409).json({ message: 'Username already taken' });
-  }
+// Documents and users stored in memory
+let documents = readData(dataPath);
+let users = readData(usersPath);
 
-  registeredUsers[username] = username;
-  res.status(201).json({ message: 'User registered successfully' });
-});
+// Socket.io
+const io = socketio(server);
 
 io.on('connection', (socket) => {
-  socket.on('join-room', (roomId) => {
-    socket.join(roomId);
+  // User authentication (replace with your preferred method)
+  socket.on('authenticate', ({ username, password }) => {
+    if (users[username] && users[username].password === password) {
+      socket.emit('authenticated', { username });
+    } else {
+      socket.emit('unauthorized');
+    }
+  });
+
+  // Join document room
+  socket.on('join-document', (documentId) => {
+    socket.join(documentId);
+    io.to(documentId).emit('init-document', documents[documentId]);
+  });
+
+  // User edits the document
+  socket.on('edit-document', (data) => {
+    const { documentId, content, position } = data;
+    documents[documentId] = content; // Update document in memory
+    writeData(dataPath, documents); // Write updated data to file
+    // Broadcast updated document and user information to all users in the room
+    io.to(documentId).emit('update-document', { content, position, username: socket.username });
+  });
+
+  // Disconnect
+  socket.on('disconnect', () => {
+    console.log('User disconnected');
   });
 });
 
+// Routes
+app.get('/', (req, res) => {
+  res.send('Server is running');
+});
+
+// Start server
 server.listen(port, () => {
   console.log(`Server is running on port ${port}`);
 });
