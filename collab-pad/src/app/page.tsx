@@ -84,6 +84,9 @@ Happy coding! 🎉`,
   const [tabs, setTabs] = useState<Tab[]>([]);
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
 
+  // Toast notification state
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
+
   // Initialize with welcome tab
   useEffect(() => {
     const welcomeFile = files.find(f => f.id === 'welcome');
@@ -313,6 +316,49 @@ Happy coding! 🎉`,
   // Get active file for editor
   const activeFile = activeTabId ? files.find(f => f.id === activeTabId) : null;
 
+  const handleSaveFile = useCallback((tabId?: string) => {
+    const targetTabId = tabId || activeTabId;
+    if (targetTabId) {
+      const targetFile = files.find(f => f.id === targetTabId);
+      
+      // Mark the tab as saved (not dirty)
+      setTabs(prevTabs =>
+        prevTabs.map(tab => {
+          if (tab.id === targetTabId) {
+            return { ...tab, isDirty: false };
+          }
+          return tab;
+        })
+      );
+      
+      // Show success toast
+      setToast({
+        message: `File "${targetFile?.name}" saved successfully!`,
+        type: 'success'
+      });
+      
+      // Auto-hide toast after 3 seconds
+      setTimeout(() => setToast(null), 3000);
+      
+      // In a real application, this would save to a server or file system
+      console.log('File saved:', targetFile?.name, 'Content length:', targetFile?.content?.length || 0);
+    }
+  }, [activeTabId, files]);
+
+  // Keyboard shortcut handler
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      // Ctrl+S or Cmd+S to save
+      if ((event.ctrlKey || event.metaKey) && event.key === 's') {
+        event.preventDefault();
+        handleSaveFile();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [handleSaveFile]);
+
   return (
     <div className="h-screen flex flex-col bg-gray-900 text-white overflow-hidden">
       {/* Top Bar */}
@@ -359,6 +405,7 @@ Happy coding! 🎉`,
                 activeTabId={activeTabId}
                 onTabSelect={handleTabSelect}
                 onTabClose={handleTabClose}
+                onTabSave={handleSaveFile}
               />
             </div>
 
@@ -397,6 +444,23 @@ Happy coding! 🎉`,
             onLeaveRoom={handleLeaveRoom}
             className="h-full flex items-center justify-center"
           />
+        </div>
+      )}
+
+      {/* Toast Notification */}
+      {toast && (
+        <div className={`fixed top-4 right-4 z-50 px-4 py-2 rounded-lg shadow-lg transition-all duration-300 ${
+          toast.type === 'success' ? 'bg-green-600' : 
+          toast.type === 'error' ? 'bg-red-600' : 'bg-blue-600'
+        } text-white`}>
+          <div className="flex items-center gap-2">
+            {toast.type === 'success' && (
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
+              </svg>
+            )}
+            <span className="text-sm font-medium">{toast.message}</span>
+          </div>
         </div>
       )}
     </div>
