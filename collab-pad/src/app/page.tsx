@@ -1,101 +1,513 @@
-import Image from "next/image";
+'use client';
+
+import { useState, useEffect, useCallback } from 'react';
+import { v4 as uuidv4 } from 'uuid';
+import dynamic from 'next/dynamic';
+
+import FileExplorer, { FileItem } from '@/components/FileExplorer';
+import TabSystem from '@/components/TabSystem';
+import UserPresence from '@/components/UserPresence';
+import RoomManager from '@/components/RoomManager';
+
+// Dynamically import Monaco Editor wrapper to avoid SSR issues
+const MonacoEditor = dynamic(() => import('@/components/MonacoWrapper'), {
+  ssr: false,
+  loading: () => (
+    <div className="h-full flex items-center justify-center bg-gray-800 text-white">
+      Loading ColabPad...
+    </div>
+  ),
+});
+
+interface Tab {
+  id: string;
+  file: FileItem;
+  isDirty: boolean;
+  isActive: boolean;
+}
+
+interface ActiveUser {
+  id: string;
+  name: string;
+  color: string;
+  cursor?: {
+    line: number;
+    column: number;
+  };
+  isTyping?: boolean;
+}
 
 export default function Home() {
-  return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-8 row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="https://nextjs.org/icons/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-semibold">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li>Save and see your changes instantly.</li>
-        </ol>
+  // User and Room State
+  const [userId] = useState(() => uuidv4());
+  const [userName] = useState(() => `User_${Math.random().toString(36).substr(2, 4)}`);
+  const [roomId, setRoomId] = useState<string | null>(null);
+  const [isConnected, setIsConnected] = useState(false);
+  const [activeUsers, setActiveUsers] = useState<ActiveUser[]>([]);
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="https://nextjs.org/icons/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
+  // File Management State
+  const [files, setFiles] = useState<FileItem[]>([
+    {
+      id: 'welcome',
+      name: 'Welcome.md',
+      type: 'file',
+      language: 'markdown',
+      content: `# Welcome to ColabPad! 🚀
+
+ColabPad is a collaborative code editor inspired by Notepad++. Here's what you can do:
+
+## Features ✨
+- **Real-time collaboration**: Multiple people can edit simultaneously
+- **Syntax highlighting**: Support for multiple programming languages
+- **File management**: Create, rename, and organize files and folders
+- **Tab system**: Work with multiple files at once
+- **User presence**: See who's online and what they're working on
+
+## Getting Started 🛠️
+1. Create or join a room to start collaborating
+2. Use the file explorer to manage your files
+3. Start coding together in real-time!
+
+## Supported Languages 💻
+- JavaScript/TypeScript
+- Python
+- Java
+- C/C++
+- HTML/CSS
+- Markdown
+- JSON
+- And many more!
+
+Happy coding! 🎉`,
+    },
+  ]);
+  const [tabs, setTabs] = useState<Tab[]>([]);
+  const [activeTabId, setActiveTabId] = useState<string | null>(null);
+
+  // Initialize with welcome tab
+  useEffect(() => {
+    const welcomeFile = files.find(f => f.id === 'welcome');
+    if (welcomeFile && tabs.length === 0) {
+      const welcomeTab = {
+        id: welcomeFile.id,
+        file: welcomeFile,
+        isDirty: false,
+        isActive: true,
+      };
+      setTabs([welcomeTab]);
+      setActiveTabId(welcomeFile.id);
+    }
+  }, [files, tabs.length]);
+
+  // Check for room ID in URL params
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const roomParam = urlParams.get('room');
+    if (roomParam) {
+      setRoomId(roomParam);
+      setIsConnected(true);
+      // Add current user to active users
+      setActiveUsers([{
+        id: userId,
+        name: userName,
+        color: '#4ECDC4',
+      }]);
+    }
+  }, [userId, userName]);
+
+  // Room Management
+  const handleCreateRoom = useCallback(() => {
+    const newRoomId = uuidv4().split('-')[0]; // Short room ID
+    setRoomId(newRoomId);
+    setIsConnected(true);
+    setActiveUsers([{
+      id: userId,
+      name: userName,
+      color: '#4ECDC4',
+    }]);
+    
+    // Update URL without refresh
+    const newUrl = new URL(window.location.href);
+    newUrl.searchParams.set('room', newRoomId);
+    window.history.pushState({}, '', newUrl);
+  }, [userId, userName]);
+
+  const handleJoinRoom = useCallback((targetRoomId: string) => {
+    setRoomId(targetRoomId);
+    setIsConnected(true);
+    setActiveUsers([{
+      id: userId,
+      name: userName,
+      color: '#FF6B6B',
+    }]);
+    
+    // Update URL without refresh
+    const newUrl = new URL(window.location.href);
+    newUrl.searchParams.set('room', targetRoomId);
+    window.history.pushState({}, '', newUrl);
+  }, [userId, userName]);
+
+  const handleLeaveRoom = useCallback(() => {
+    setRoomId(null);
+    setIsConnected(false);
+    setActiveUsers([]);
+    
+    // Clear room from URL
+    const newUrl = new URL(window.location.href);
+    newUrl.searchParams.delete('room');
+    window.history.pushState({}, '', newUrl);
+  }, []);
+
+  // File Management
+  const handleFileSelect = useCallback((file: FileItem) => {
+    if (file.type === 'file') {
+      // Check if tab already exists
+      const existingTab = tabs.find(tab => tab.file.id === file.id);
+      
+      if (existingTab) {
+        // Switch to existing tab
+        setActiveTabId(file.id);
+        setTabs(prevTabs =>
+          prevTabs.map(tab => ({
+            ...tab,
+            isActive: tab.id === file.id,
+          }))
+        );
+      } else {
+        // Create new tab
+        const newTab = {
+          id: file.id,
+          file,
+          isDirty: false,
+          isActive: true,
+        };
+        
+        setTabs(prevTabs => [
+          ...prevTabs.map(tab => ({ ...tab, isActive: false })),
+          newTab,
+        ]);
+        setActiveTabId(file.id);
+      }
+    }
+  }, [tabs]);
+
+  const handleFileCreate = useCallback((parentId: string | null, type: 'file' | 'folder') => {
+    const newId = uuidv4();
+    const defaultName = type === 'file' ? 'untitled.txt' : 'New Folder';
+    const language = type === 'file' ? getLanguageFromFileName(defaultName) : undefined;
+    
+    const newFile: FileItem = {
+      id: newId,
+      name: defaultName,
+      type,
+      language,
+      content: type === 'file' ? '' : undefined,
+      children: type === 'folder' ? [] : undefined,
+    };
+
+    setFiles(prevFiles => {
+      if (parentId) {
+        // Add to specific parent folder
+        return addFileToParent(prevFiles, parentId, newFile);
+      } else {
+        // Add to root level
+        return [...prevFiles, newFile];
+      }
+    });
+  }, []);
+
+  const handleFileDelete = useCallback((fileId: string) => {
+    setFiles(prevFiles => removeFileFromTree(prevFiles, fileId));
+    
+    // Close tab if it exists
+    setTabs(prevTabs => {
+      const updatedTabs = prevTabs.filter(tab => tab.file.id !== fileId);
+      
+      // If the deleted file was active, switch to another tab
+      if (activeTabId === fileId && updatedTabs.length > 0) {
+        const newActiveTab = updatedTabs[updatedTabs.length - 1];
+        setActiveTabId(newActiveTab.id);
+        return updatedTabs.map(tab => ({
+          ...tab,
+          isActive: tab.id === newActiveTab.id,
+        }));
+      } else if (updatedTabs.length === 0) {
+        setActiveTabId(null);
+      }
+      
+      return updatedTabs;
+    });
+  }, [activeTabId]);
+
+  const handleFileRename = useCallback((fileId: string, newName: string) => {
+    setFiles(prevFiles => renameFileInTree(prevFiles, fileId, newName));
+    
+    // Update tab if it exists
+    setTabs(prevTabs =>
+      prevTabs.map(tab => {
+        if (tab.file.id === fileId) {
+          return {
+            ...tab,
+            file: {
+              ...tab.file,
+              name: newName,
+              language: getLanguageFromFileName(newName),
+            },
+          };
+        }
+        return tab;
+      })
+    );
+  }, []);
+
+  // Tab Management
+  const handleTabSelect = useCallback((tabId: string) => {
+    setActiveTabId(tabId);
+    setTabs(prevTabs =>
+      prevTabs.map(tab => ({
+        ...tab,
+        isActive: tab.id === tabId,
+      }))
+    );
+  }, []);
+
+  const handleTabClose = useCallback((tabId: string) => {
+    setTabs(prevTabs => {
+      const updatedTabs = prevTabs.filter(tab => tab.id !== tabId);
+      
+      // If the closed tab was active, switch to another tab
+      if (activeTabId === tabId && updatedTabs.length > 0) {
+        const newActiveTab = updatedTabs[updatedTabs.length - 1];
+        setActiveTabId(newActiveTab.id);
+        return updatedTabs.map(tab => ({
+          ...tab,
+          isActive: tab.id === newActiveTab.id,
+        }));
+      } else if (updatedTabs.length === 0) {
+        setActiveTabId(null);
+      }
+      
+      return updatedTabs;
+    });
+  }, [activeTabId]);
+
+  const handleContentChange = useCallback((content: string) => {
+    if (activeTabId) {
+      // Update the file content in the files state
+      setFiles(prevFiles => 
+        updateFileInTree(prevFiles, activeTabId, { content })
+      );
+      
+      // Mark the tab as dirty
+      setTabs(prevTabs =>
+        prevTabs.map(tab => {
+          if (tab.id === activeTabId) {
+            return { ...tab, isDirty: true };
+          }
+          return tab;
+        })
+      );
+    }
+  }, [activeTabId]);
+
+  // Get active file for editor
+  const activeFile = activeTabId ? files.find(f => f.id === activeTabId) : null;
+
+  return (
+    <div className="h-screen flex flex-col bg-gray-900 text-white overflow-hidden">
+      {/* Top Bar */}
+      <div className="flex-shrink-0">
+        <RoomManager
+          roomId={roomId}
+          isConnected={isConnected}
+          userCount={activeUsers.length}
+          onCreateRoom={handleCreateRoom}
+          onJoinRoom={handleJoinRoom}
+          onLeaveRoom={handleLeaveRoom}
+        />
+        
+        {roomId && (
+          <UserPresence
+            users={activeUsers}
+            currentUserId={userId}
+          />
+        )}
+      </div>
+
+      {/* Main Content */}
+      {roomId ? (
+        <div className="flex flex-1 overflow-hidden">
+          {/* Sidebar */}
+          <div className="w-64 flex-shrink-0 border-r border-gray-700">
+            <FileExplorer
+              files={files}
+              onFileSelect={handleFileSelect}
+              onFileCreate={handleFileCreate}
+              onFileDelete={handleFileDelete}
+              onFileRename={handleFileRename}
+              selectedFileId={activeTabId}
+              className="h-full"
             />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:min-w-44"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+          </div>
+
+          {/* Editor Area */}
+          <div className="flex-1 flex flex-col">
+            {/* Tabs */}
+            <div className="flex-shrink-0">
+              <TabSystem
+                tabs={tabs}
+                activeTabId={activeTabId}
+                onTabSelect={handleTabSelect}
+                onTabClose={handleTabClose}
+              />
+            </div>
+
+            {/* Editor */}
+            <div className="flex-1">
+              {activeFile && roomId ? (
+                <MonacoEditor
+                  key={activeFile.id}
+                  fileId={activeFile.id}
+                  language={activeFile.language || 'plaintext'}
+                  roomId={roomId}
+                  userId={userId}
+                  userName={userName}
+                  onContentChange={handleContentChange}
+                  initialContent={activeFile.content || ''}
+                />
+              ) : (
+                <div className="h-full flex items-center justify-center bg-gray-800 text-gray-400">
+                  <div className="text-center">
+                    <h3 className="text-lg font-semibold mb-2">No file selected</h3>
+                    <p>Select a file from the explorer or create a new one to start editing</p>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-6 flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
+      ) : (
+        <div className="flex-1">
+          <RoomManager
+            roomId={roomId}
+            isConnected={isConnected}
+            userCount={activeUsers.length}
+            onCreateRoom={handleCreateRoom}
+            onJoinRoom={handleJoinRoom}
+            onLeaveRoom={handleLeaveRoom}
+            className="h-full flex items-center justify-center"
           />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+        </div>
+      )}
     </div>
   );
+}
+
+// Helper functions
+function getLanguageFromFileName(fileName: string): string {
+  const extension = fileName.split('.').pop()?.toLowerCase();
+  
+  const languageMap: Record<string, string> = {
+    js: 'javascript',
+    jsx: 'javascript',
+    ts: 'typescript',
+    tsx: 'typescript',
+    py: 'python',
+    java: 'java',
+    cpp: 'cpp',
+    c: 'c',
+    cs: 'csharp',
+    php: 'php',
+    rb: 'ruby',
+    go: 'go',
+    rs: 'rust',
+    swift: 'swift',
+    kt: 'kotlin',
+    scala: 'scala',
+    html: 'html',
+    htm: 'html',
+    css: 'css',
+    scss: 'scss',
+    sass: 'sass',
+    less: 'less',
+    json: 'json',
+    xml: 'xml',
+    yaml: 'yaml',
+    yml: 'yaml',
+    md: 'markdown',
+    sql: 'sql',
+    sh: 'shell',
+    bash: 'shell',
+    ps1: 'powershell',
+    dockerfile: 'dockerfile',
+    txt: 'plaintext',
+  };
+  
+  return languageMap[extension || ''] || 'plaintext';
+}
+
+function addFileToParent(files: FileItem[], parentId: string, newFile: FileItem): FileItem[] {
+  return files.map(file => {
+    if (file.id === parentId && file.type === 'folder') {
+      return {
+        ...file,
+        children: [...(file.children || []), newFile],
+      };
+    } else if (file.children) {
+      return {
+        ...file,
+        children: addFileToParent(file.children, parentId, newFile),
+      };
+    }
+    return file;
+  });
+}
+
+function removeFileFromTree(files: FileItem[], fileId: string): FileItem[] {
+  return files
+    .filter(file => file.id !== fileId)
+    .map(file => {
+      if (file.children) {
+        return {
+          ...file,
+          children: removeFileFromTree(file.children, fileId),
+        };
+      }
+      return file;
+    });
+}
+
+function renameFileInTree(files: FileItem[], fileId: string, newName: string): FileItem[] {
+  return files.map(file => {
+    if (file.id === fileId) {
+      return {
+        ...file,
+        name: newName,
+        language: file.type === 'file' ? getLanguageFromFileName(newName) : undefined,
+      };
+    } else if (file.children) {
+      return {
+        ...file,
+        children: renameFileInTree(file.children, fileId, newName),
+      };
+    }
+    return file;
+  });
+}
+
+function updateFileInTree(files: FileItem[], fileId: string, updates: Partial<FileItem>): FileItem[] {
+  return files.map(file => {
+    if (file.id === fileId) {
+      return {
+        ...file,
+        ...updates,
+      };
+    } else if (file.children) {
+      return {
+        ...file,
+        children: updateFileInTree(file.children, fileId, updates),
+      };
+    }
+    return file;
+  });
 }
