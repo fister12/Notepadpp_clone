@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+
+# ColabPad - Collaborative Code Editor
+Sitemap: https://colabpad.vercel.app/sitemap.xml

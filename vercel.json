@@ -1,0 +1,33 @@
+{
+  "version": 2,
+  "name": "colabpad",
+  "builds": [
+    {
+      "src": "package.json",
+      "use": "@vercel/next"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/api/(.*)",
+      "dest": "/api/$1"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/$1"
+    }
+  ],
+  "env": {
+    "NODE_ENV": "production"
+  },
+  "build": {
+    "env": {
+      "NODE_ENV": "production"
+    }
+  },
+  "functions": {
+    "src/app/**/*.{js,ts,jsx,tsx}": {
+      "runtime": "nodejs18.x"
+    }
+  }
+}
