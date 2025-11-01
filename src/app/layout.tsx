@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
 import "./globals.css";
 
@@ -18,7 +18,6 @@ export const metadata: Metadata = {
   description: "A web-based collaborative code editor inspired by Notepad++. Edit code together in real-time with syntax highlighting, file management, and seamless collaboration.",
   keywords: ["code editor", "collaborative", "notepad++", "real-time", "programming", "development"],
   authors: [{ name: "ColabPad Team" }],
-  viewport: "width=device-width, initial-scale=1",
   robots: "index, follow",
   openGraph: {
     title: "ColabPad - Collaborative Code Editor",
@@ -31,6 +30,11 @@ export const metadata: Metadata = {
     title: "ColabPad - Collaborative Code Editor",
     description: "Edit code together in real-time with our collaborative editor",
   },
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
 };
 
 export default function RootLayout({
